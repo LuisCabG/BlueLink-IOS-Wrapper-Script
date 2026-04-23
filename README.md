@@ -37,7 +37,7 @@ A [Scriptable](https://scriptable.app) app for iOS that lets you monitor and con
 ### Installation
 
 1. Install [Scriptable](https://scriptable.app) from the App Store.
-2. Download the latest release `.js` file from the [Releases](https://github.com/LuisCabG/BlueLink-IOS-Wrapper-Script/releases) page.
+2. Download **`BlueLink-iOS-Wrapper.js`** from the [Releases](https://github.com/LuisCabG/BlueLink-IOS-Wrapper-Script/releases) page.
 3. Place the file in your **iCloud Drive → Scriptable** folder.
 4. Open Scriptable, tap the script, and follow the on-screen setup to enter your region and credentials.
 

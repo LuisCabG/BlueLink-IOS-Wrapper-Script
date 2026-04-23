@@ -4,7 +4,7 @@
   "description": "testing",
   "main": "index.js",
   "scripts": {
-    "build": "source ./build.sh; build ./src/index.ts egmp-bluelink-test",
+    "build": "source ./build.sh; build ./src/index.ts BlueLink-iOS-Wrapper",
     "prebuild": "npm run lint",
     "lint": "npm run prettier && eslint \"*.ts\" \"src/**/*.ts\" --fix",
     "watch": "source ./build.sh; build_and_watch",
