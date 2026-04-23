@@ -71,6 +71,7 @@ export interface Config {
   multiCar: boolean
   promptForUpdate: boolean
   vin: string | undefined
+  language: 'en' | 'fr'
   widgetConfig: WidgetConfig
   customClimates: CustomClimateConfig[]
   hideDefaultClimates: boolean
@@ -104,6 +105,7 @@ export interface FlattenedConfig {
   multiCar: boolean
   promptForUpdate: boolean
   vin: string | undefined
+  language: 'en' | 'fr'
   widgetConfig: WidgetConfig
   customClimates: CustomClimateConfig[]
   hideDefaultClimates: boolean
@@ -145,6 +147,7 @@ const DEFAULT_CONFIG = {
   allowWidgetRemoteRefresh: false,
   carColor: 'white',
   manufacturer: 'hyundai',
+  language: 'en' as const,
   hideDefaultClimates: false,
   customClimates: [],
   chargeLimits: [
@@ -259,6 +262,7 @@ export async function loadConfigScreen(bl: Bluelink | undefined = undefined) {
       manufacturer,
       vin,
       hideDefaultClimates,
+      language,
     }) => {
       // read and combine with current saved config as other config screens may have changed settings (custom climates etc)
       const config = getConfig()
@@ -285,6 +289,7 @@ export async function loadConfigScreen(bl: Bluelink | undefined = undefined) {
           manufacturer: manufacturer?.toLowerCase(),
           vin: vin ? vin.toUpperCase().trim() : undefined,
           hideDefaultClimates: hideDefaultClimates,
+          language: language ?? 'en',
         },
       } as Config
       setConfig(newConfig)
@@ -494,6 +499,13 @@ export async function loadConfigScreen(bl: Bluelink | undefined = undefined) {
         type: 'checkbox',
         label: 'Enable Multi Car Support',
         isRequired: false,
+      },
+      language: {
+        type: 'dropdown',
+        label: 'Language / Langue',
+        options: ['en', 'fr'],
+        allowCustom: false,
+        isRequired: true,
       },
     },
   })(getFlattenedConfig())

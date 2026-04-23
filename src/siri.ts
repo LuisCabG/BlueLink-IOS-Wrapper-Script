@@ -9,6 +9,7 @@ import {
 import { Logger } from 'lib/logger'
 import { Bluelink, ClimateRequest, ChargeLimit } from 'lib/bluelink-regions/base'
 import { getChargeCompletionString, sleep } from 'lib/util'
+import { t } from './lib/i18n'
 
 const SIRI_LOG_FILE = 'egmp-bluelink-siri.log'
 
@@ -51,7 +52,7 @@ export async function processSiriRequest(config: Config, bl: Bluelink, shortcutP
       return response
     }
   }
-  return `You asked me ${shortcutParameter} and i dont support that command`
+  return t('siri_unsupported')
 }
 
 async function getStatus(bl: Bluelink): Promise<string> {
@@ -60,14 +61,14 @@ async function getStatus(bl: Bluelink): Promise<string> {
 
   const carName = status.car.nickName || `${status.car.modelYear}`
 
-  let response = `${carName}'s battery is at ${status.status.soc}% and ${status.status.locked ? 'locked' : 'un-locked'}`
-  if (status.status.climate) response += ', and your climate is currently on'
+  let response = `${carName}'s battery is at ${status.status.soc}% and ${status.status.locked ? t('siri_locked') : t('siri_unlocked')}`
+  if (status.status.climate) response += t('siri_climate_on')
 
   if (status.status.isCharging) {
     const chargeCompleteTime = getChargeCompletionString(lastSeen, status.status.remainingChargeTimeMins, 'long')
     response += `. Also your car is charging at ${status.status.chargingPower}kw and will be finished charging at ${chargeCompleteTime}`
   } else if (status.status.isPluggedIn) {
-    response += '. Also your car is currently plugged into a charger.'
+    response += t('siri_plugged_in')
   }
   const lastSeenShort = lastSeen.toLocaleString(undefined, {
     weekday: 'long',
@@ -102,10 +103,9 @@ async function getRemoteStatus(bl: Bluelink): Promise<string> {
   bl.getStatus(true, true)
   //wait for getCar command to be completed + another 200ms to ensure the remote status command is sent
   const result = await waitForCommandSent(bl, 200)
-  if (!result)
-    return "I've issued a remote status request but it seems like the command was not sent. Please try again."
+  if (!result) return t('siri_remote_request_fail')
   await sleep(200)
-  return "I've issued a remote status request. Ask me for the normal status again in 30 seconds and I will have your answer."
+  return t('siri_remote_request_sent')
 }
 
 async function warm(bl: Bluelink): Promise<string> {

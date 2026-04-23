@@ -14,6 +14,7 @@ import { getAppLogger } from './lib/util'
 import { processSiriRequest } from 'siri'
 import { getConfig, loadConfigScreen, configExists, setConfig } from 'config'
 import { confirm, quickOptions } from './lib/scriptable-utils'
+import { setLang, t } from './lib/i18n'
 ;(async () => {
   // load config on first run if not configured
   if (!configExists() && (config.runsWithSiri || config.runsInWidget)) return
@@ -24,6 +25,7 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
 
   const logger = getAppLogger()
   const blConfig = getConfig()
+  setLang(blConfig.language ?? 'en')
   let bl = undefined
 
   // Init Bluelink - Deal with region exceptions if needed
@@ -32,33 +34,28 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
     bl = await initRegionalBluelink(blConfig, config.runsWithSiri || config.runsInWidget ? true : false)
   } catch (e) {
     const error = e instanceof Error ? e.message : e
-    const errorMessage = `Error Initalizing Bluelink: ${error}`
+    const errorMessage = `${t('error_initializing')}: ${error}`
     const errorMessageShort = errorMessage.replace(/\{.*\}/, '')
     logger.log(errorMessage)
     if (!config.runsWithSiri && !config.runsInWidget) {
-      await quickOptions(['Ok', 'Settings', 'Share Debug Logs'], {
+      await quickOptions([t('ok'), t('settings'), t('share_debug_logs')], {
         title: errorMessageShort,
         onOptionSelect: async (opt) => {
-          if (opt === 'Ok') return
-          switch (opt) {
-            case 'Share Debug Logs': {
-              const blRedactedLogs = getBluelinkLogger().readAndRedact()
-              const widgetLogs = getWidgetLogger().read()
-              const appLogs = getAppLogger().read()
-              await ShareSheet.present([
-                'Bluelink API logs:',
-                blRedactedLogs,
-                'Widget Logs',
-                widgetLogs,
-                'App Logs',
-                appLogs,
-              ])
-              break
-            }
-            case 'Settings': {
-              await loadConfigScreen()
-              break
-            }
+          if (opt === t('ok')) return
+          if (opt === t('share_debug_logs')) {
+            const blRedactedLogs = getBluelinkLogger().readAndRedact()
+            const widgetLogs = getWidgetLogger().read()
+            const appLogs = getAppLogger().read()
+            await ShareSheet.present([
+              'Bluelink API logs:',
+              blRedactedLogs,
+              'Widget Logs',
+              widgetLogs,
+              'App Logs',
+              appLogs,
+            ])
+          } else if (opt === t('settings')) {
+            await loadConfigScreen()
           }
         },
       })
@@ -89,7 +86,7 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
         await quickOptions(
           carOptionsNames.map((car) => car.name),
           {
-            title: 'Multiple cars found, choose your EV',
+            title: t('multiple_cars'),
             onOptionSelect: (opt) => {
               const selectedCar = carOptionsNames.find((car) => car.name === opt)
               if (selectedCar) {
@@ -100,8 +97,8 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
           },
         )
       } else {
-        await confirm('Login Failed - please re-check your credentials', {
-          confirmButtonTitle: 'Ok',
+        await confirm(t('login_failed'), {
+          confirmButtonTitle: t('ok'),
           includeCancel: false,
         })
         await loadConfigScreen()
@@ -111,8 +108,8 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
 
     if (!bl) {
       logger.log('Bluelink instance is undefined')
-      await confirm('Something went wrong initalizing Bluelink - try again later', {
-        confirmButtonTitle: 'Ok',
+      await confirm(t('init_error_generic'), {
+        confirmButtonTitle: t('ok'),
         includeCancel: false,
       })
       return
@@ -131,7 +128,7 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
     return
   }
 
-  // actual app / widget / siri response handiling
+  // actual app / widget / siri response handling
   if (config.runsInWidget) {
     let widget = undefined
     switch (config.widgetFamily) {
@@ -168,7 +165,7 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
 
       const resp = await createApp(blConfig, bl)
       // @ts-ignore - undocumented api
-      App.close() // add this back after dev
+      App.close()
       Script.complete()
       return resp
     } catch (error) {

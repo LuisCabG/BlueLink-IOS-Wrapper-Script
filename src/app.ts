@@ -1,4 +1,5 @@
 import { Config } from 'config'
+import { t, webT } from './lib/i18n'
 import { Bluelink, Status, ChargeLimit } from './lib/bluelink-regions/base'
 import { quickOptions, destructiveConfirm } from 'lib/scriptable-utils'
 import { loadConfigScreen, deleteConfig, setConfig } from 'config'
@@ -83,7 +84,7 @@ async function doApiAction(
       }
       sleep(3000).then(() => webView.evaluateJavaScript('clearStatus()').catch(() => {}))
     } else {
-      await webView.evaluateJavaScript(`setLoading('↻  Waiting for car...')`)
+      await webView.evaluateJavaScript(`setLoading(${JSON.stringify(t('waiting_for_car'))})`)
     }
   })
 }
@@ -103,9 +104,9 @@ function handleMainAction(
       bl,
       starting ? 'startCharge' : 'stopCharge',
       undefined,
-      starting ? 'Starting charging...' : 'Stopping charging...',
-      starting ? 'Charging started! ✓' : 'Charging stopped! ✓',
-      `Failed to ${starting ? 'start' : 'stop'} charging!`,
+      starting ? t('starting_charge') : t('stopping_charge'),
+      starting ? t('charge_started') : t('charge_stopped'),
+      starting ? t('charge_start_fail') : t('charge_stop_fail'),
       async () => {
         const cached = bl.getCachedStatus()
         await pushStateUpdate(
@@ -123,9 +124,9 @@ function handleMainAction(
       bl,
       locking ? 'lock' : 'unlock',
       undefined,
-      locking ? 'Locking car...' : 'Unlocking car...',
-      locking ? 'Car locked! ✓' : 'Car unlocked! ✓',
-      `Failed to ${locking ? 'lock' : 'unlock'} car!`,
+      locking ? t('locking') : t('unlocking'),
+      locking ? t('car_locked') : t('car_unlocked'),
+      locking ? t('lock_fail') : t('unlock_fail'),
       async () => {
         const cached = bl.getCachedStatus()
         await pushStateUpdate(
@@ -142,17 +143,17 @@ function handleMainAction(
       bl,
       'status',
       undefined,
-      'Refreshing status...',
-      'Status updated! ✓',
-      'Failed to refresh status!',
+      t('refreshing_status'),
+      t('status_updated'),
+      t('status_fail'),
       async (data) => pushStateUpdate(webView, data as Status, bl.getDistanceUnit(), config),
     )
   } else if (type === 'chargeLimit') {
     const chargeLimits = Object.values(config.chargeLimits).map((x) => x.name)
-    quickOptions(chargeLimits.concat(['Cancel']), {
-      title: 'Confirm charge limit to set',
+    quickOptions(chargeLimits.concat([t('cancel')]), {
+      title: t('confirm_charge_limit'),
       onOptionSelect: (opt) => {
-        if (opt === 'Cancel') return
+        if (opt === t('cancel')) return
         const payload = Object.values(config.chargeLimits).find((x) => x.name === opt)
         if (!payload) return
         doApiAction(
@@ -160,9 +161,9 @@ function handleMainAction(
           bl,
           'chargeLimit',
           payload,
-          'Setting charge limit...',
-          `Charge limit ${payload.name} set! ✓`,
-          'Failed to set charge limit!',
+          t('setting_charge_limit'),
+          `${t('confirm_charge_limit')} ${payload.name} ✓`,
+          t('charge_limit_fail'),
           async (data) => pushStateUpdate(webView, data as Status, bl.getDistanceUnit(), config),
         )
       },
@@ -439,7 +440,7 @@ body { display: flex; flex-direction: column; }
         <span id="range">~ ${s.range} ${distUnit}</span>
       </span>
     </div>
-    <div id="charge-time" style="font-size:13px;color:#30D158;margin-top:3px;${isCharging && s.remainingChargeTimeMins > 0 ? '' : 'display:none'}">⏱ ${isCharging && s.remainingChargeTimeMins > 0 ? formatChargeTimeMins(s.remainingChargeTimeMins) + ' remaining' : ''}</div>
+    <div id="charge-time" style="font-size:13px;color:#30D158;margin-top:3px;${isCharging && s.remainingChargeTimeMins > 0 ? '' : 'display:none'}">⏱ ${isCharging && s.remainingChargeTimeMins > 0 ? formatChargeTimeMins(s.remainingChargeTimeMins) + ' ' + t('remaining') : ''}</div>
     <div class="bar-track">
       <div class="bar-fill ${socClass}" id="soc-bar" style="width:${s.soc}%"></div>
     </div>
@@ -453,15 +454,15 @@ body { display: flex; flex-direction: column; }
   <div class="icon-bar">
     <div class="icon-item${isPluggedIn ? '' : ' faded'}" id="icon-charge" onclick="act('charge')">
       <span id="charge-icon-wrap" class="${isCharging ? 'zap-anim' : ''}">${chargeSVG}</span>
-      <span class="icon-badge" id="badge-charge">${isCharging ? 'Stop' : 'Charge'}</span>
+      <span class="icon-badge" id="badge-charge">${isCharging ? t('stop') : t('charge')}</span>
     </div>
     <div class="icon-item" id="icon-climate" onclick="nav('climate')">
       ${climateSVG}
-      <span class="icon-badge">Climate</span>
+      <span class="icon-badge">${t('climate')}</span>
     </div>
     <div class="icon-item" id="icon-lock" onclick="act('lock')">
       <span class="lock-wrap" id="lock-wrap"><span id="lock-icon">${locked ? lockSVG : unlockSVG}</span></span>
-      <span class="icon-badge" id="badge-lock">${locked ? 'Locked' : 'Unlocked'}</span>
+      <span class="icon-badge" id="badge-lock">${locked ? t('locked') : t('unlocked')}</span>
     </div>
     <div class="icon-item" id="icon-climit" onclick="act('chargeLimit')">
       ${chargeLimitSVG}
@@ -469,7 +470,7 @@ body { display: flex; flex-direction: column; }
     </div>
     <div class="icon-item" id="icon-refresh" onclick="act('status')">
       <span id="refresh-icon-wrap">${refreshSVG}</span>
-      <span class="icon-badge">Refresh</span>
+      <span class="icon-badge">${t('refresh')}</span>
     </div>
     <div class="icon-item" id="icon-12v">
       ${twelveSVG}
@@ -481,13 +482,14 @@ body { display: flex; flex-direction: column; }
 
   <div class="footer">
     <span id="odometer">${s.odometer.toLocaleString()} ${distUnit}</span>
-    <span id="vin">VIN ${car.vin}</span>
+    <span id="vin">${t('vin_prefix')}${car.vin}</span>
   </div>
 
 </div>
 <script>
 const LOCK_SVG   = ${JSON.stringify(lockSVG)}
 const UNLOCK_SVG = ${JSON.stringify(unlockSVG)}
+const T = ${JSON.stringify(webT())}
 let state = ${JSON.stringify(initialState)}
 let _sTaps = 0, _sTimer = null
 
@@ -585,7 +587,7 @@ function updateState(s) {
     if (ic && mins > 0) {
       var h = Math.floor(mins / 60), m = mins % 60
       var timeStr = h > 0 ? h + 'h' + (m > 0 ? ' ' + m + 'm' : '') : m + 'm'
-      chargeTimeEl.textContent = '⏱ ' + timeStr + ' remaining'
+      chargeTimeEl.textContent = '⏱ ' + timeStr + ' ' + T.remaining
       chargeTimeEl.style.display = 'block'
     } else {
       chargeTimeEl.style.display = 'none'
@@ -602,13 +604,13 @@ function updateState(s) {
   var chargeItem = document.getElementById('icon-charge')
   chargeItem.className = 'icon-item' + (ip ? '' : ' faded')
   chargeWrap.className = ic ? 'zap-anim' : ''
-  document.getElementById('badge-charge').textContent = ic ? 'Stop' : 'Charge'
+  document.getElementById('badge-charge').textContent = ic ? T.stop : T.charge
 
   // Lock icon with bounce animation
   var lockWrap = document.getElementById('lock-wrap')
   var prevLocked = state.locked
   document.getElementById('lock-icon').innerHTML = lk ? LOCK_SVG : UNLOCK_SVG
-  document.getElementById('badge-lock').textContent = lk ? 'Locked' : 'Unlocked'
+  document.getElementById('badge-lock').textContent = lk ? T.locked : T.unlocked
   if (prevLocked !== lk) {
     lockWrap.className = 'lock-wrap unlocking'
     setTimeout(function() { lockWrap.className = 'lock-wrap' }, 300)

@@ -1,6 +1,7 @@
 import { getTable, Div, P, Spacer, quickOptions, OK } from 'lib/scriptable-utils'
 import { GithubRelease, Version } from 'lib/version'
 import { getAppLogger } from './lib/util'
+import { t } from './lib/i18n'
 
 const SCRIPTABLE_DIR = '/var/mobile/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents'
 const logger = getAppLogger()
@@ -11,7 +12,7 @@ export function doDowngrade(appFile = `${Script.name()}.js`) {
     fm.remove(`${SCRIPTABLE_DIR}/${appFile}`)
     fm.move(`${SCRIPTABLE_DIR}/${appFile}.backup`, `${SCRIPTABLE_DIR}/${appFile}`)
   } else {
-    OK('Downgrade Dailed', { message: `There is no previous version of ${appFile}` })
+    OK(t('about_downgrade_failed'), { message: `There is no previous version of ${appFile}` })
   }
 }
 
@@ -20,7 +21,6 @@ async function doUpgrade(url: string, appFile = `${Script.name()}.js`) {
   const data = await req.load()
   if (req.response.statusCode === 200) {
     const fm = FileManager.iCloud()
-    // try to backup current script - log errors, script could have been renamed for example
     try {
       if (fm.fileExists(`${SCRIPTABLE_DIR}/${appFile}.backup`)) {
         fm.remove(`${SCRIPTABLE_DIR}/${appFile}.backup`)
@@ -44,11 +44,9 @@ const { present, connect, setState } = getTable<{
 })
 
 export async function loadAboutScreen() {
-  // load version async
   const version = new Version('LuisCabG', 'BlueLink-IOS-Wrapper-Script')
   version.getRelease().then((release) => setState({ release: release }))
 
-  // load image async - placeholder until donation link is set up
   const req = new Request('https://bluelink.andyfase.com/images/coffee.png')
   req.loadImage().then((image) => setState({ coffeeImage: image }))
 
@@ -69,6 +67,7 @@ export async function loadAboutScreen() {
       Spacer(),
       upgrade(),
       upgradeNotes(),
+      kofi(),
       disclaimer(),
     ],
   })
@@ -76,7 +75,7 @@ export async function loadAboutScreen() {
 
 const pageTitle = connect(() => {
   return Div([
-    P('BlueLink iOS Wrapper', {
+    P(t('about_title'), {
       font: (n) => Font.boldSystemFont(n),
       fontSize: 35,
       align: 'left',
@@ -87,41 +86,41 @@ const pageTitle = connect(() => {
 const appDescription = connect(() => {
   return Div(
     [
-      P('A scriptable app for IOS that allows you to control your Hyundai / Kia electric car using the Bluelink API.', {
+      P(t('about_description'), {
         font: (n) => Font.mediumRoundedSystemFont(n),
         fontSize: 20,
         align: 'left',
       }),
     ],
-    {
-      height: 100,
-    },
+    { height: 100 },
   )
 })
 
 const author = connect(() => {
-  const divArray = [
-    P('Author: LuisCabG', {
-      font: (n) => Font.mediumRoundedSystemFont(n),
-      fontSize: 20,
-      align: 'left',
-    }),
-    P('Based on egmp-bluelink-scriptable by Andy Fase', {
-      font: (n) => Font.systemFont(n),
-      fontSize: 14,
-      align: 'left',
-    }),
-  ]
-  return Div(divArray, {
-    height: 70,
-    align: 'center',
-    onTap: () => Safari.open('https://github.com/LuisCabG/BlueLink-IOS-Wrapper-Script'),
-  })
+  return Div(
+    [
+      P(t('about_author'), {
+        font: (n) => Font.mediumRoundedSystemFont(n),
+        fontSize: 20,
+        align: 'left',
+      }),
+      P(t('about_based_on'), {
+        font: (n) => Font.systemFont(n),
+        fontSize: 14,
+        align: 'left',
+      }),
+    ],
+    {
+      height: 70,
+      align: 'center',
+      onTap: () => Safari.open('https://github.com/LuisCabG/BlueLink-IOS-Wrapper-Script'),
+    },
+  )
 })
 
 const currentVersion = connect(({ state: { currentVersion } }) => {
   return Div([
-    P(`Current Version:`, {
+    P(t('about_current_version'), {
       font: (n) => Font.mediumRoundedSystemFont(n),
       fontSize: 20,
       align: 'left',
@@ -138,7 +137,7 @@ const latestVersion = connect(({ state: { currentVersion, release } }) => {
   if (!release) return Spacer()
 
   return Div([
-    P(`Latest Version Available:`, {
+    P(t('about_latest_version'), {
       font: (n) => Font.mediumRoundedSystemFont(n),
       fontSize: 20,
       align: 'left',
@@ -161,7 +160,7 @@ const upgrade = connect(({ state: { currentVersion, release } }) => {
 
   return Div(
     [
-      P(`Click to Auto Install ${release.version}`, {
+      P(`${t('install')} ${release.version}`, {
         font: (n) => Font.mediumRoundedSystemFont(n),
         fontSize: 20,
         color: Color.blue(),
@@ -171,10 +170,10 @@ const upgrade = connect(({ state: { currentVersion, release } }) => {
     {
       onTap: async () => {
         const appFile = `${Script.name()}.js`
-        quickOptions(['Install', 'Cancel'], {
-          title: `Confirm Install - App will update "${appFile}" and auto-close`,
+        quickOptions([t('install'), t('cancel')], {
+          title: `${t('install')} "${appFile}"`,
           onOptionSelect: async (opt) => {
-            if (opt === 'Install') {
+            if (opt === t('install')) {
               await doUpgrade(release.url, appFile)
               Script.complete()
               // @ts-ignore - undocumented api
@@ -192,7 +191,7 @@ const upgradeNotes = connect(({ state: { currentVersion, release } }) => {
 
   return Div(
     [
-      P(`Release Details:\n\n ${release.name}:\n\n ${release.notes}`, {
+      P(`${t('about_release_details')}\n\n ${release.name}:\n\n ${release.notes}`, {
         font: (n) => Font.mediumRoundedSystemFont(n),
         fontSize: 17,
         align: 'left',
@@ -202,24 +201,44 @@ const upgradeNotes = connect(({ state: { currentVersion, release } }) => {
   )
 })
 
+const kofi = connect(() => {
+  return Div(
+    [
+      P(t('coffee_title'), {
+        font: (n) => Font.boldRoundedSystemFont(n),
+        fontSize: 18,
+        color: Color.orange(),
+        align: 'center',
+      }),
+      P(t('coffee_body'), {
+        font: (n) => Font.systemFont(n),
+        fontSize: 13,
+        align: 'center',
+        color: Color.gray(),
+      }),
+    ],
+    {
+      height: 70,
+      onTap: () => Safari.open('https://ko-fi.com/donlucho'),
+    },
+  )
+})
+
 const disclaimer = connect(() => {
   return Div(
     [
-      P('⚠️ Disclaimer', {
+      P(t('disclaimer_title'), {
         font: (n) => Font.boldSystemFont(n),
         fontSize: 14,
         align: 'left',
         color: Color.gray(),
       }),
-      P(
-        'This is an unofficial tool not affiliated with Hyundai or Kia. Use at your own risk. The author is not responsible for any damage, unintended vehicle behavior, or other consequences resulting from its use.',
-        {
-          font: (n) => Font.systemFont(n),
-          fontSize: 12,
-          align: 'left',
-          color: Color.gray(),
-        },
-      ),
+      P(t('disclaimer_body'), {
+        font: (n) => Font.systemFont(n),
+        fontSize: 12,
+        align: 'left',
+        color: Color.gray(),
+      }),
     ],
     { height: 100 },
   )
