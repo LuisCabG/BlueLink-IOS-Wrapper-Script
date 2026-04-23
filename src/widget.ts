@@ -153,15 +153,15 @@ async function refreshDataForWidget(bl: Bluelink, config: Config): Promise<Widge
 
   const MIN_API_REFRESH_TIME = 300000 // 5 minutes
 
-  // Day Intervals - day lasts for 16 days - in milliseconds
-  const DEFAULT_STATUS_CHECK_INTERVAL_DAY = 3600 * config.widgetConfig.standardPollPeriod * 1000
-  const DEFAULT_REMOTE_REFRESH_INTERVAL_DAY = 3600 * config.widgetConfig.remotePollPeriod * 1000
-  const DEFAULT_CHARGING_REMOTE_REFRESH_INTERVAL_DAY = 3600 * config.widgetConfig.chargingRemotePollPeriod * 1000
+  // Day Intervals - in milliseconds (values are in minutes)
+  const DEFAULT_STATUS_CHECK_INTERVAL_DAY = 60 * config.widgetConfig.standardPollPeriod * 1000
+  const DEFAULT_REMOTE_REFRESH_INTERVAL_DAY = 60 * config.widgetConfig.remotePollPeriod * 1000
+  const DEFAULT_CHARGING_REMOTE_REFRESH_INTERVAL_DAY = 60 * config.widgetConfig.chargingRemotePollPeriod * 1000
 
-  // Night Intervals - night lasts for 8 hours - in milliseconds
-  const DEFAULT_STATUS_CHECK_INTERVAL_NIGHT = 3600 * config.widgetConfig.nightStandardPollPeriod * 1000
-  const DEFAULT_REMOTE_REFRESH_INTERVAL_NIGHT = 3600 * config.widgetConfig.nightRemotePollPeriod * 1000
-  const DEFAULT_CHARGING_REMOTE_REFRESH_INTERVAL_NIGHT = 3600 * config.widgetConfig.nightChargingRemotePollPeriod * 1000
+  // Night Intervals - in milliseconds (values are in minutes)
+  const DEFAULT_STATUS_CHECK_INTERVAL_NIGHT = 60 * config.widgetConfig.nightStandardPollPeriod * 1000
+  const DEFAULT_REMOTE_REFRESH_INTERVAL_NIGHT = 60 * config.widgetConfig.nightRemotePollPeriod * 1000
+  const DEFAULT_CHARGING_REMOTE_REFRESH_INTERVAL_NIGHT = 60 * config.widgetConfig.nightChargingRemotePollPeriod * 1000
 
   let cache: WidgetRefreshCache | undefined = undefined
   const currentTimestamp = Date.now()
@@ -400,10 +400,6 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
   const lockImgEl = lockTopStack.addImage(await getTintedIconAsync(isLocked ? 'locked' : 'unlocked'))
   lockImgEl.imageSize = new Size(26, 26)
   lockImgEl.tintColor = isLocked ? Color.green() : Color.red()
-  const lockLabelEl = lockTopStack.addText(isLocked ? 'Locked' : 'Unlocked')
-  lockLabelEl.font = Font.mediumSystemFont(11)
-  lockLabelEl.textColor = isLocked ? Color.green() : Color.red()
-  lockLabelEl.centerAlignText()
 
   // ── Car image centered ──
   mainStack.addSpacer(4)
@@ -574,10 +570,6 @@ export async function createSmallWidget(config: Config, bl: Bluelink) {
   const lockImgEl = lockTopStack.addImage(await getTintedIconAsync(isLocked ? 'locked' : 'unlocked'))
   lockImgEl.imageSize = new Size(22, 22)
   lockImgEl.tintColor = isLocked ? Color.green() : Color.red()
-  const lockLabelEl = lockTopStack.addText(isLocked ? 'Locked' : 'Unlocked')
-  lockLabelEl.font = Font.mediumSystemFont(9)
-  lockLabelEl.textColor = isLocked ? Color.green() : Color.red()
-  lockLabelEl.centerAlignText()
 
   // ── Car image centered ──
   mainStack.addSpacer()

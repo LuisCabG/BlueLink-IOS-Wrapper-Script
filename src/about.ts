@@ -69,6 +69,7 @@ export async function loadAboutScreen() {
       Spacer(),
       upgrade(),
       upgradeNotes(),
+      disclaimer(),
     ],
   })
 }
@@ -198,6 +199,29 @@ const upgradeNotes = connect(({ state: { currentVersion, release } }) => {
       }),
     ],
     { height: 300 },
+  )
+})
+
+const disclaimer = connect(() => {
+  return Div(
+    [
+      P('⚠️ Disclaimer', {
+        font: (n) => Font.boldSystemFont(n),
+        fontSize: 14,
+        align: 'left',
+        color: Color.gray(),
+      }),
+      P(
+        'This is an unofficial tool not affiliated with Hyundai or Kia. Use at your own risk. The author is not responsible for any damage, unintended vehicle behavior, or other consequences resulting from its use.',
+        {
+          font: (n) => Font.systemFont(n),
+          fontSize: 12,
+          align: 'left',
+          color: Color.gray(),
+        },
+      ),
+    ],
+    { height: 100 },
   )
 })
 

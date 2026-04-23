@@ -252,6 +252,18 @@ function formatChargeTimeMins(mins: number): string {
   return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
 }
 
+function buildBatterySVG(soc: number, isCharging: boolean, socClass: string): string {
+  const fillW = Math.max(0, (soc / 100) * 43).toFixed(1)
+  const fillColor = socClass === 'charging' ? '#30D158' : socClass === 'low' ? '#FF453A' : '#0A84FF'
+  const boltStyle = isCharging ? '' : 'display:none'
+  return `<svg viewBox="0 0 52 24" width="42" height="20" fill="none">
+    <rect x="1" y="1" width="46" height="22" rx="3.5" stroke="#fff" stroke-width="1.5"/>
+    <rect x="48" y="8" width="3.5" height="8" rx="1.75" fill="#fff"/>
+    <rect id="batt-fill-rect" x="2.5" y="2.5" width="${fillW}" height="19" rx="2" fill="${fillColor}"/>
+    <path id="batt-bolt-path" d="M26 4L18 13L24 13L22 20L31 11L25 11Z" fill="rgba(0,0,0,0.8)" style="${boltStyle}"/>
+  </svg>`
+}
+
 function buildMainHTML(config: Config, status: Status, carImageB64: string, distUnit: string): string {
   const { car, status: s } = status
   const name = car.nickName || car.modelName
@@ -274,7 +286,6 @@ function buildMainHTML(config: Config, status: Status, carImageB64: string, dist
     distUnit,
   }
 
-  const batterySVG = `<svg viewBox="0 0 28 14" width="38" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="0.75" y="0.75" width="23.5" height="12.5" rx="2.5"/><path d="M25 4.5v5"/></svg>`
   const chargeSVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
   const climateSVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>`
   const lockSVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
@@ -286,6 +297,7 @@ function buildMainHTML(config: Config, status: Status, carImageB64: string, dist
   const aboutSVG = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="3"/></svg>`
 
   const socClass = isCharging ? 'charging' : s.soc < 20 ? 'low' : 'normal'
+  const battSVG = buildBatterySVG(s.soc, isCharging, socClass)
 
   return `<!DOCTYPE html>
 <html>
@@ -315,24 +327,15 @@ body { display: flex; flex-direction: column; }
 
 /* ── SOC block ── */
 .soc-block { flex-shrink: 0; margin-top: 6px; }
-.soc-row { display: flex; align-items: baseline; gap: 8px; }
+.soc-row { display: flex; align-items: center; gap: 8px; }
 .soc-num {
-  font-size: 48px; font-weight: 700; letter-spacing: -2px;
+  font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
   transition: color 0.4s;
 }
 .soc-num.charging { color: #30D158; }
 .soc-num.normal   { color: #fff; }
 .soc-num.low      { color: #FF453A; }
 .soc-detail { font-size: 15px; color: #8E8E93; display: flex; align-items: center; gap: 5px; }
-.charge-badge {
-  font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
-  opacity: 0; transform: translateY(4px);
-  transition: opacity 0.3s, transform 0.3s;
-}
-.charge-badge.visible { opacity: 1; transform: translateY(0); }
-.charge-badge.charging { background: #0D2E1A; color: #30D158; }
-.charge-badge.plugged   { background: #1A1A2E; color: #0A84FF; }
-
 /* ── Battery bar ── */
 .bar-track {
   height: 6px; background: #2C2C2E; border-radius: 3px;
@@ -430,13 +433,10 @@ body { display: flex; flex-direction: column; }
 
   <div class="soc-block">
     <div class="soc-row">
-      <span id="batt-icon" class="soc-num ${socClass}" style="display:inline-flex;align-items:center;margin-right:6px;flex-shrink:0">${batterySVG}</span>
+      <span id="batt-icon" style="display:inline-flex;align-items:center;margin-right:8px;flex-shrink:0">${battSVG}</span>
       <span class="soc-num ${socClass}" id="soc">${s.soc}%</span>
       <span class="soc-detail">
         <span id="range">~ ${s.range} ${distUnit}</span>
-        <span class="charge-badge${isCharging ? ' visible charging' : isPluggedIn ? ' visible plugged' : ''}" id="charge-badge">
-          ${isCharging ? '⚡ Charging' : isPluggedIn ? '🔌 Plugged in' : ''}
-        </span>
       </span>
     </div>
     <div id="charge-time" style="font-size:13px;color:#30D158;margin-top:3px;${isCharging && s.remainingChargeTimeMins > 0 ? '' : 'display:none'}">⏱ ${isCharging && s.remainingChargeTimeMins > 0 ? formatChargeTimeMins(s.remainingChargeTimeMins) + ' remaining' : ''}</div>
@@ -567,11 +567,16 @@ function updateState(s) {
     var cls = ic ? 'charging' : s.soc < 20 ? 'low' : 'normal'
     socEl.className = 'soc-num ' + cls
     animateNumber(socEl, s.soc, '%')
-    var battIcon = document.getElementById('batt-icon')
-    if (battIcon) battIcon.className = 'soc-num ' + cls
     var bar = document.getElementById('soc-bar')
     bar.style.width = s.soc + '%'
     bar.className = 'bar-fill ' + cls
+    var fillRect = document.getElementById('batt-fill-rect')
+    if (fillRect) {
+      fillRect.setAttribute('width', Math.max(0, (s.soc / 100) * 43).toFixed(1))
+      fillRect.setAttribute('fill', ic ? '#30D158' : s.soc < 20 ? '#FF453A' : '#0A84FF')
+    }
+    var boltPath = document.getElementById('batt-bolt-path')
+    if (boltPath) boltPath.style.display = ic ? '' : 'none'
   }
 
   var chargeTimeEl = document.getElementById('charge-time')
@@ -590,19 +595,6 @@ function updateState(s) {
   if (s.range != null) {
     var rangeEl = document.getElementById('range')
     rangeEl.textContent = '~ ' + s.range + ' ' + unit
-  }
-
-  // Charge badge
-  var badge = document.getElementById('charge-badge')
-  if (ic) {
-    badge.className = 'charge-badge visible charging'
-    badge.textContent = '\u26A1 Charging'
-  } else if (ip) {
-    badge.className = 'charge-badge visible plugged'
-    badge.textContent = '\uD83D\uDD0C Plugged in'
-  } else {
-    badge.className = 'charge-badge'
-    badge.textContent = ''
   }
 
   // Charge icon animation

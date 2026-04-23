@@ -160,12 +160,12 @@ const DEFAULT_CONFIG = {
     },
   ],
   widgetConfig: {
-    standardPollPeriod: 1,
-    remotePollPeriod: 4,
-    chargingRemotePollPeriod: 2,
-    nightStandardPollPeriod: 2,
-    nightRemotePollPeriod: 6,
-    nightChargingRemotePollPeriod: 4,
+    standardPollPeriod: 8,
+    remotePollPeriod: 30,
+    chargingRemotePollPeriod: 10,
+    nightStandardPollPeriod: 15,
+    nightRemotePollPeriod: 60,
+    nightChargingRemotePollPeriod: 20,
   },
 } as Config
 
@@ -206,10 +206,20 @@ export function getConfig(): Config {
   if (!config || !configValid) {
     config = DEFAULT_CONFIG
   }
-  return {
-    ...DEFAULT_CONFIG,
-    ...config,
+  const merged = { ...DEFAULT_CONFIG, ...config }
+  // Migrate poll periods from hours (old) to minutes (new). Old values were small integers (1–6).
+  // New minimums are 5+ minutes, so any value < 5 must be an old hour-based value.
+  if (merged.widgetConfig.standardPollPeriod < 5) {
+    merged.widgetConfig = {
+      standardPollPeriod: merged.widgetConfig.standardPollPeriod * 60,
+      remotePollPeriod: merged.widgetConfig.remotePollPeriod * 60,
+      chargingRemotePollPeriod: merged.widgetConfig.chargingRemotePollPeriod * 60,
+      nightStandardPollPeriod: merged.widgetConfig.nightStandardPollPeriod * 60,
+      nightRemotePollPeriod: merged.widgetConfig.nightRemotePollPeriod * 60,
+      nightChargingRemotePollPeriod: merged.widgetConfig.nightChargingRemotePollPeriod * 60,
+    }
   }
+  return merged
 }
 
 function configResetRequired(oldConfig: Config, newConfig: Config): boolean {
@@ -492,7 +502,7 @@ export async function loadConfigScreen(bl: Bluelink | undefined = undefined) {
 export async function loadWidgetConfigScreen() {
   return await form<WidgetConfig>({
     title: 'Widget Poll Periods',
-    subtitle: 'All periods are measured in hours',
+    subtitle: 'All periods are measured in minutes',
     onSubmit: ({
       standardPollPeriod,
       remotePollPeriod,

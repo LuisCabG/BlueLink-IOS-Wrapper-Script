@@ -75,6 +75,18 @@ Open the script → tap the **ℹ About** option → if a newer version is avail
 
 ---
 
+## Disclaimer
+
+> **Use at your own risk.**
+>
+> This is an unofficial, community-built tool with no affiliation to Hyundai, Kia, or any of their subsidiaries. It interacts with your vehicle through the same API used by the official Bluelink app, but no guarantees are made about its reliability, accuracy, or safety.
+>
+> The author(s) of this project are **not responsible** for any damage, data loss, unintended vehicle behavior, voided warranties, account lockouts, or any other consequences — direct or indirect — that may result from using this software. By using this tool, you accept full responsibility for any actions taken on your vehicle.
+>
+> Always ensure your vehicle is in a safe state before using remote commands. Do not rely on this app for safety-critical decisions.
+
+---
+
 ## Credits
 
 - **Original project**: [egmp-bluelink-scriptable](https://github.com/andyfase/egmp-bluelink-scriptable) by [Andy Fase](https://github.com/andyfase)
