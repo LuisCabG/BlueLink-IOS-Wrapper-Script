@@ -1,43 +1,87 @@
-# E-GMP Bluelink Scriptable
+# BlueLink iOS Wrapper
 
-## What is this?
+A [Scriptable](https://scriptable.app) app for iOS that lets you monitor and control your Hyundai/Kia electric vehicle using the Bluelink API — directly from your home screen.
 
-An alternative Bluelink app to use on Hyundai / Kia E-GMP Electric Cars. Its a [scriptable app](https://scriptable.app/) for IOS that allows you to control your Hyundai / Kia electric car using the Bluelink API. 
+> **Based on [egmp-bluelink-scriptable](https://github.com/andyfase/egmp-bluelink-scriptable) by [Andy Fase](https://github.com/andyfase).** All credit for the original API integration, widget framework, and app architecture goes to Andy. This fork adds UI enhancements, widget improvements, and quality-of-life features.
+
+---
 
 ## Features
 
-* Auto-Updating Homescreen and Lockscreen Widgets
-* Fresh and more responsive app UI
-* Single click options for common commands (lock, warm, charge etc) in both app and in IOS Control Center
-* Siri voice support "Hey Siri, Warm the car"
-* Automations via IOS Shortcuts like walk-away lock
-* Unlimited Custom Climate configurations 
+- **Home screen widgets** (small, medium, lock screen accessories)
+  - Car image centered in widget
+  - Battery % + range in top-left corner
+  - Tappable lock/unlock icon in top-right — lock or unlock your car directly from the widget without opening the app
+  - Battery color: white (normal) → yellow (≤20%) → red (≤10%)
+  - Reverse-geocoded car location address shown below battery %
+- **Main app**
+  - Car status auto-refreshes every time the app opens
+  - Climate control (heat/cool/defrost) with live status updates
+  - 5-minute cooldown between climate commands to avoid Bluelink API rate limits, with a live countdown timer
+  - Error alerts shown as centered modal overlays instead of bottom toasts
+  - Lock / unlock / charging controls
+- **Siri Shortcuts** support
+- **Multiple regions**: US, Canada, Europe, Australia, India
 
-## Docs
+---
 
-See [https://bluelink.andyfase.com](https://bluelink.andyfase.com) for all documentation on feature set, installation instructions and usgae of the app.
+## Requirements
 
-## In-use
+- iPhone with [Scriptable](https://scriptable.app) installed (free on the App Store)
+- A Hyundai or Kia EV with an active Bluelink / UVO / MyKia subscription
+- Your Bluelink app credentials (email, password, PIN)
 
-[<img src="./docs/images/widget_charging.png" width="400px"/>](https://bluelink.andyfase.com/images/egmp-scriptable-in-use.mp4)
-<center>(click to view video)</center>
+---
 
-## Dev Instructions
+## Installation
 
-### Repo Structure / Codebase
+1. Install [Scriptable](https://scriptable.app) from the App Store.
+2. Download the latest release `.js` file from the [Releases](https://github.com/LuisCabG/BlueLink-IOS-Wrapper-Script/releases) page.
+3. Place the file in your **iCloud Drive → Scriptable** folder.
+4. Open Scriptable, tap the script, and follow the on-screen setup to enter your region and credentials.
 
-The code is written in typescipt and transpiled to Javascript, which the scriptable app requires. 
+---
 
-`/src` is the main source code of the app  
-`/docs` is a Jekyll static CMS, which Gtihub pages supports.  
-`/.github/docs.yml` is the GitHub Action pipeline that builds and deploys the Github Pages  
-`/exampleData` is a set of exampke API payloads 
+## Adding a Widget
 
-### Building the code
+1. Long-press your home screen → tap **+** → search for **Scriptable**.
+2. Choose widget size (Small or Medium recommended).
+3. Tap the widget → set **Script** to this script's name.
+4. Set **When Interacting** to **Run Script**.
 
-```
-cd src
-npm i
-npm run build ./src/index.ts egmp-bluelink
-```
+---
 
+## Security
+
+Your credentials (email, password, PIN) are stored exclusively in the **iOS Keychain** — they never leave your device in plaintext. The script communicates directly with Hyundai/Kia's Bluelink API over HTTPS, the same endpoints used by the official Bluelink mobile app.
+
+---
+
+## Updating
+
+Open the script → tap the **ℹ About** option → if a newer version is available you'll see an **Auto Install** button that downloads and replaces the script in one tap (with an automatic backup of your current version).
+
+---
+
+## Supported Regions
+
+| Region | Notes |
+|--------|-------|
+| USA | Hyundai / Kia Bluelink |
+| Canada | Hyundai / Kia |
+| Europe | Hyundai MyBluelink |
+| Australia | |
+| India | |
+
+---
+
+## Credits
+
+- **Original project**: [egmp-bluelink-scriptable](https://github.com/andyfase/egmp-bluelink-scriptable) by [Andy Fase](https://github.com/andyfase)
+- **This fork**: [LuisCabG](https://github.com/LuisCabG)
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
