@@ -322,7 +322,7 @@ export class Bluelink {
       lastStatusCheck: Date.now(),
       lastRemoteStatusCheck: forceUpdate ? Date.now() : lastRemoteCheck.getTime(),
       isCharging: this.cache ? this.cache.status.isCharging : false,
-      isPluggedIn: this.cache ? this.cache.status.isCharging : false,
+      isPluggedIn: this.cache ? this.cache.status.isPluggedIn : false,
       chargingPower: this.cache ? this.cache.status.chargingPower : 0,
       remainingChargeTimeMins: this.cache ? this.cache.status.remainingChargeTimeMins : 0,
       range: this.cache ? this.cache.status.range : 0,

@@ -54,6 +54,7 @@ async function pushStateUpdate(
     odometer: status.status.odometer,
     twelveSoc: status.status.twelveSoc,
     chargeLimitText: chargeLimitName(status.status.chargeLimit, config),
+    remainingChargeTimeMins: status.status.remainingChargeTimeMins,
     distUnit,
     locationText,
   }
@@ -245,6 +246,12 @@ function handleNav(webView: WebView, bl: Bluelink, config: Config, dest: string)
   }
 }
 
+function formatChargeTimeMins(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
+}
+
 function buildMainHTML(config: Config, status: Status, carImageB64: string, distUnit: string): string {
   const { car, status: s } = status
   const name = car.nickName || car.modelName
@@ -263,9 +270,11 @@ function buildMainHTML(config: Config, status: Status, carImageB64: string, dist
     odometer: s.odometer,
     twelveSoc: s.twelveSoc,
     chargeLimitText,
+    remainingChargeTimeMins: s.remainingChargeTimeMins,
     distUnit,
   }
 
+  const batterySVG = `<svg viewBox="0 0 28 14" width="38" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="0.75" y="0.75" width="23.5" height="12.5" rx="2.5"/><path d="M25 4.5v5"/></svg>`
   const chargeSVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
   const climateSVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>`
   const lockSVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
@@ -421,6 +430,7 @@ body { display: flex; flex-direction: column; }
 
   <div class="soc-block">
     <div class="soc-row">
+      <span id="batt-icon" class="soc-num ${socClass}" style="display:inline-flex;align-items:center;margin-right:6px;flex-shrink:0">${batterySVG}</span>
       <span class="soc-num ${socClass}" id="soc">${s.soc}%</span>
       <span class="soc-detail">
         <span id="range">~ ${s.range} ${distUnit}</span>
@@ -429,6 +439,7 @@ body { display: flex; flex-direction: column; }
         </span>
       </span>
     </div>
+    <div id="charge-time" style="font-size:13px;color:#30D158;margin-top:3px;${isCharging && s.remainingChargeTimeMins > 0 ? '' : 'display:none'}">⏱ ${isCharging && s.remainingChargeTimeMins > 0 ? formatChargeTimeMins(s.remainingChargeTimeMins) + ' remaining' : ''}</div>
     <div class="bar-track">
       <div class="bar-fill ${socClass}" id="soc-bar" style="width:${s.soc}%"></div>
     </div>
@@ -486,6 +497,7 @@ function act(type) {
     isCharging:  String(state.isCharging),
     isPluggedIn: String(state.isPluggedIn),
     locked:      String(state.locked),
+    remainingChargeTimeMins: String(state.remainingChargeTimeMins || 0),
     _t:          String(Date.now()),
   })
   location.href = 'bluelink://action?' + p.toString()
@@ -555,9 +567,24 @@ function updateState(s) {
     var cls = ic ? 'charging' : s.soc < 20 ? 'low' : 'normal'
     socEl.className = 'soc-num ' + cls
     animateNumber(socEl, s.soc, '%')
+    var battIcon = document.getElementById('batt-icon')
+    if (battIcon) battIcon.className = 'soc-num ' + cls
     var bar = document.getElementById('soc-bar')
     bar.style.width = s.soc + '%'
     bar.className = 'bar-fill ' + cls
+  }
+
+  var chargeTimeEl = document.getElementById('charge-time')
+  if (chargeTimeEl) {
+    var mins = s.remainingChargeTimeMins != null ? s.remainingChargeTimeMins : state.remainingChargeTimeMins
+    if (ic && mins > 0) {
+      var h = Math.floor(mins / 60), m = mins % 60
+      var timeStr = h > 0 ? h + 'h' + (m > 0 ? ' ' + m + 'm' : '') : m + 'm'
+      chargeTimeEl.textContent = '⏱ ' + timeStr + ' remaining'
+      chargeTimeEl.style.display = 'block'
+    } else {
+      chargeTimeEl.style.display = 'none'
+    }
   }
 
   if (s.range != null) {
