@@ -1,4 +1,4 @@
-import { getTable, Div, P, Img, Spacer, quickOptions, OK } from 'lib/scriptable-utils'
+import { getTable, Div, P, Spacer, quickOptions, OK } from 'lib/scriptable-utils'
 import { GithubRelease, Version } from 'lib/version'
 import { getAppLogger } from './lib/util'
 
@@ -45,10 +45,10 @@ const { present, connect, setState } = getTable<{
 
 export async function loadAboutScreen() {
   // load version async
-  const version = new Version('andyfase', 'egmp-bluelink-scriptable')
+  const version = new Version('LuisCabG', 'BlueLink-IOS-Wrapper-Script')
   version.getRelease().then((release) => setState({ release: release }))
 
-  // load image async
+  // load image async - placeholder until donation link is set up
   const req = new Request('https://bluelink.andyfase.com/images/coffee.png')
   req.loadImage().then((image) => setState({ coffeeImage: image }))
 
@@ -75,7 +75,7 @@ export async function loadAboutScreen() {
 
 const pageTitle = connect(() => {
   return Div([
-    P('e-GMP Bluelink app', {
+    P('BlueLink iOS Wrapper', {
       font: (n) => Font.boldSystemFont(n),
       fontSize: 35,
       align: 'left',
@@ -98,18 +98,24 @@ const appDescription = connect(() => {
   )
 })
 
-const author = connect(({ state: { coffeeImage } }) => {
+const author = connect(() => {
   const divArray = [
-    P('Author: Andy Fase', {
+    P('Author: LuisCabG', {
       font: (n) => Font.mediumRoundedSystemFont(n),
       fontSize: 20,
       align: 'left',
     }),
+    P('Based on egmp-bluelink-scriptable by Andy Fase', {
+      font: (n) => Font.systemFont(n),
+      fontSize: 14,
+      align: 'left',
+    }),
   ]
-  if (coffeeImage) {
-    divArray.push(Img(coffeeImage, { align: 'right', width: '50%' }))
-  }
-  return Div(divArray, { height: 60, align: 'center', onTap: () => Safari.open('https://buymeacoffee.com/andyfase') })
+  return Div(divArray, {
+    height: 70,
+    align: 'center',
+    onTap: () => Safari.open('https://github.com/LuisCabG/BlueLink-IOS-Wrapper-Script'),
+  })
 })
 
 const currentVersion = connect(({ state: { currentVersion } }) => {

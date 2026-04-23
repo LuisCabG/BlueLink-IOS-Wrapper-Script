@@ -1,6 +1,5 @@
 import {
   getTintedIconAsync,
-  getBatteryPercentColor,
   calculateBatteryIcon,
   getChargingIcon,
   dateStringOptions,
@@ -25,6 +24,71 @@ const NIGHT_HOUR_STOP = 7
 
 let WIDGET_LOGGER: Logger | undefined = undefined
 const WIDGET_LOG_FILE = `${Script.name().replaceAll(' ', '')}-widget.log`
+
+function formatRemainingTime(mins: number): string {
+  if (mins <= 0) return 'Done'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h === 0) return `${m}m left`
+  if (m === 0) return `${h}h left`
+  return `${h}h ${m}m left`
+}
+
+const GEO_CACHE_KEY = 'egmp_geocode_cache'
+const GEO_CACHE_TTL = 60 * 60 * 1000
+
+async function reverseGeocode(lat: string, lon: string): Promise<string | null> {
+  const cacheKey = `${Math.round(parseFloat(lat) * 1000)},${Math.round(parseFloat(lon) * 1000)}`
+  try {
+    if (Keychain.contains(GEO_CACHE_KEY)) {
+      const cache = JSON.parse(Keychain.get(GEO_CACHE_KEY)) as Record<string, { addr: string; ts: number }>
+      const hit = cache[cacheKey]
+      if (hit && Date.now() - hit.ts < GEO_CACHE_TTL) return hit.addr
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const req = new Request(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=14`)
+    req.headers = { 'User-Agent': 'egmp-bluelink-scriptable' }
+    const json = (await req.loadJSON()) as {
+      address?: {
+        house_number?: string
+        road?: string
+        suburb?: string
+        neighbourhood?: string
+        city?: string
+        town?: string
+        village?: string
+        county?: string
+      }
+    }
+    const a = json.address ?? {}
+    const street = [a.house_number, a.road].filter(Boolean).join(' ')
+    const place = a.city ?? a.town ?? a.village ?? a.county ?? ''
+    const parts = [street || (a.suburb ?? a.neighbourhood), place].filter(Boolean)
+    const addr = parts.join(', ')
+    if (!addr) return null
+    try {
+      const existing = Keychain.contains(GEO_CACHE_KEY)
+        ? (JSON.parse(Keychain.get(GEO_CACHE_KEY)) as Record<string, { addr: string; ts: number }>)
+        : {}
+      existing[cacheKey] = { addr, ts: Date.now() }
+      Keychain.set(GEO_CACHE_KEY, JSON.stringify(existing))
+    } catch {
+      /* ignore */
+    }
+    return addr
+  } catch {
+    return null
+  }
+}
+
+function newWidget(): ListWidget {
+  const w = new ListWidget()
+  w.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}`
+  return w
+}
 
 interface WidgetRefreshCache {
   lastRemoteRefresh: number
@@ -221,7 +285,7 @@ async function refreshDataForWidget(bl: Bluelink, config: Config): Promise<Widge
 }
 
 export function createErrorWidget(message: string) {
-  const widget = new ListWidget()
+  const widget = newWidget()
   widget.setPadding(20, 10, 15, 15)
 
   const mainStack = widget.addStack()
@@ -254,157 +318,181 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
   const refresh = await refreshDataForWidgetWithTimeout(bl, config)
   const status = refresh.status
 
-  // Prepare image
   const appIcon = await bl.getCarImage(config.carColor)
-  const title = status.car.nickName || `${status.car.modelYear} ${status.car.modelName}`
-
-  // define widget and set date for when the next refresh should not occur before.
-  const widget = new ListWidget()
-  widget.setPadding(20, 5, 20, 15)
+  const widget = newWidget()
+  widget.setPadding(14, 14, 14, 14)
   widget.refreshAfterDate = refresh.nextRefresh
+  widget.backgroundColor = DARK_MODE ? new Color(DARK_BG_COLOR) : new Color(LIGHT_BG_COLOR)
 
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
 
-  // Add background color
-  widget.backgroundColor = DARK_MODE ? new Color(DARK_BG_COLOR) : new Color(LIGHT_BG_COLOR)
-
-  // Show app icon and title
-  mainStack.addSpacer()
-  const titleStack = mainStack.addStack()
-  titleStack.addSpacer(10)
-  const titleElement = titleStack.addText(title)
-  titleElement.textColor = DARK_MODE ? Color.white() : Color.black()
-  titleElement.textOpacity = 0.7
-  titleElement.font = Font.mediumSystemFont(25)
-  titleStack.addSpacer()
-  const appIconElement = titleStack.addImage(appIcon)
-  appIconElement.imageSize = new Size(40, 40 / (appIcon.size.width / appIcon.size.height))
-  appIconElement.centerAlignImage()
-  mainStack.addSpacer()
-
-  // space
-  if (!status.status.isCharging) mainStack.addSpacer()
-
-  // Center Stack
-  const contentStack = mainStack.addStack()
-  const carImageElement = contentStack.addImage(appIcon)
-  carImageElement.imageSize = new Size(180, 180 / (appIcon.size.width / appIcon.size.height))
-  // contentStack.addSpacer()
-
-  // Battery Info
-  const batteryInfoStack = contentStack.addStack()
-  batteryInfoStack.layoutVertically()
-  batteryInfoStack.addSpacer()
-
-  // Range
-  const rangeStack = batteryInfoStack.addStack()
-  rangeStack.addSpacer()
-  const rangeText = `${status.status.range} ${bl.getDistanceUnit()}`
-  const rangeElement = rangeStack.addText(rangeText)
-  rangeElement.font = Font.mediumSystemFont(20)
-  rangeElement.textColor = DARK_MODE ? Color.white() : Color.black()
-  rangeElement.rightAlignText()
-  // batteryInfoStack.addSpacer()
-
-  // set status from BL status response
   const isCharging = status.status.isCharging
   const isPluggedIn = status.status.isPluggedIn
   const batteryPercent = status.status.soc
   const remainingChargingTime = status.status.remainingChargeTimeMins
   const chargingKw = getChargingPowerString(status.status.chargingPower)
+  const isLocked = status.status.locked
+  const lastSeen = new Date(status.status.lastRemoteStatusCheck)
   const odometer =
     status.car.odometer === undefined
       ? status.status.odometer
       : status.status.odometer >= status.car.odometer
         ? status.status.odometer
         : status.car.odometer
-  const lastSeen = new Date(status.status.lastRemoteStatusCheck)
-
-  // Battery Percent Value
-  const batteryPercentStack = batteryInfoStack.addStack()
-  batteryPercentStack.addSpacer()
-  batteryPercentStack.centerAlignContent()
-  const image = await getTintedIconAsync(calculateBatteryIcon(batteryPercent))
-  const batterySymbolElement = batteryPercentStack.addImage(image)
-  batterySymbolElement.imageSize = new Size(40, 40)
+  const isClimateOn = status.status.climate
+  const climateTemp = status.status.climateTemp
+  const seatClimate = status.status.seatClimate
   const chargingIcon = getChargingIcon(isCharging, isPluggedIn, true)
+  const loc = status.status.location
+  const locationAddr = loc ? await reverseGeocode(loc.latitude, loc.longitude).catch(() => null) : null
+
+  // ── Top row: Stats left | Lock right ──
+  const topRow = mainStack.addStack()
+  topRow.layoutHorizontally()
+  topRow.centerAlignContent()
+
+  const statsStack = topRow.addStack()
+  statsStack.layoutVertically()
+
+  const rangeEl = statsStack.addText(`${status.status.range} ${bl.getDistanceUnit()}`)
+  rangeEl.font = Font.boldSystemFont(20)
+  rangeEl.textColor = DARK_MODE ? Color.white() : Color.black()
+
+  const socRow = statsStack.addStack()
+  socRow.centerAlignContent()
+  const battImg = await getTintedIconAsync(calculateBatteryIcon(batteryPercent))
+  const battImgEl = socRow.addImage(battImg)
+  battImgEl.imageSize = new Size(30, 30)
   if (chargingIcon) {
-    const chargingElement = batteryPercentStack.addImage(await getTintedIconAsync(chargingIcon))
-    chargingElement.imageSize = new Size(25, 25)
+    const chgEl = socRow.addImage(await getTintedIconAsync(chargingIcon))
+    chgEl.imageSize = new Size(20, 20)
+  }
+  socRow.addSpacer(3)
+  const socEl = socRow.addText(`${batteryPercent}%`)
+  socEl.font = Font.mediumSystemFont(18)
+  socEl.textColor =
+    batteryPercent <= 10
+      ? Color.red()
+      : batteryPercent <= 20
+        ? Color.yellow()
+        : DARK_MODE
+          ? Color.white()
+          : Color.black()
+
+  if (locationAddr) {
+    const locEl = statsStack.addText('📍 ' + locationAddr)
+    locEl.font = Font.systemFont(9)
+    locEl.textColor = DARK_MODE ? Color.white() : Color.black()
+    locEl.textOpacity = 0.5
+    locEl.minimumScaleFactor = 0.7
+    locEl.lineLimit = 1
   }
 
-  batteryPercentStack.addSpacer(5)
+  topRow.addSpacer()
 
-  const batteryPercentText = batteryPercentStack.addText(`${batteryPercent.toString()}%`)
-  batteryPercentText.textColor = getBatteryPercentColor(status.status.soc)
-  batteryPercentText.font = Font.mediumSystemFont(20)
+  // Right: Lock (tappable — runs script with action param)
+  const lockTopStack = topRow.addStack()
+  lockTopStack.layoutVertically()
+  lockTopStack.centerAlignContent()
+  lockTopStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=${isLocked ? 'unlock' : 'lock'}`
 
+  const lockImgEl = lockTopStack.addImage(await getTintedIconAsync(isLocked ? 'locked' : 'unlocked'))
+  lockImgEl.imageSize = new Size(26, 26)
+  lockImgEl.tintColor = isLocked ? Color.green() : Color.red()
+  const lockLabelEl = lockTopStack.addText(isLocked ? 'Locked' : 'Unlocked')
+  lockLabelEl.font = Font.mediumSystemFont(11)
+  lockLabelEl.textColor = isLocked ? Color.green() : Color.red()
+  lockLabelEl.centerAlignText()
+
+  // ── Car image centered ──
+  mainStack.addSpacer(4)
+  const carRow = mainStack.addStack()
+  carRow.layoutHorizontally()
+  carRow.addSpacer()
+  const carImgEl = carRow.addImage(appIcon)
+  carImgEl.imageSize = new Size(200, 200 / (appIcon.size.width / appIcon.size.height))
+  carImgEl.centerAlignImage()
+  carRow.addSpacer()
+  mainStack.addSpacer(4)
+
+  // ── Charging row ──
   if (isCharging) {
-    const chargeComplete = getChargeCompletionString(lastSeen, remainingChargingTime)
-    const batteryChargingTimeStack = mainStack.addStack()
-    batteryChargingTimeStack.layoutHorizontally()
-    batteryChargingTimeStack.addSpacer()
-    // batteryChargingTimeStack.addSpacer()
+    const chargingRow = mainStack.addStack()
+    chargingRow.layoutHorizontally()
+    chargingRow.addSpacer()
 
-    const chargingSpeedElement = batteryChargingTimeStack.addText(`${chargingKw}`)
-    chargingSpeedElement.font = Font.mediumSystemFont(14)
-    chargingSpeedElement.textOpacity = 0.9
-    chargingSpeedElement.textColor = DARK_MODE ? Color.white() : Color.black()
-    chargingSpeedElement.rightAlignText()
-    batteryChargingTimeStack.addSpacer(3)
+    const speedEl = chargingRow.addText(chargingKw)
+    speedEl.font = Font.mediumSystemFont(13)
+    speedEl.textColor = DARK_MODE ? Color.white() : Color.black()
+    speedEl.textOpacity = 0.9
+    chargingRow.addSpacer(3)
 
-    const chargingTimeIconElement = batteryChargingTimeStack.addImage(
-      await getTintedIconAsync('charging-complete-widget'),
-    )
-    chargingTimeIconElement.imageSize = new Size(15, 15)
-    batteryChargingTimeStack.addSpacer(3)
+    const timeIconEl = chargingRow.addImage(await getTintedIconAsync('charging-complete-widget'))
+    timeIconEl.imageSize = new Size(13, 13)
+    chargingRow.addSpacer(3)
 
-    const chargingTimeElement = batteryChargingTimeStack.addText(`${chargeComplete}`)
-    chargingTimeElement.font = Font.mediumSystemFont(14)
-    chargingTimeElement.textOpacity = 0.9
-    chargingTimeElement.textColor = DARK_MODE ? Color.white() : Color.black()
-    chargingTimeElement.rightAlignText()
+    const timeEl = chargingRow.addText(formatRemainingTime(remainingChargingTime))
+    timeEl.font = Font.mediumSystemFont(13)
+    timeEl.textColor = Color.green()
+    timeEl.textOpacity = 0.9
+    chargingRow.addSpacer()
   }
+
+  // ── Climate row ──
+  const climateIconName = isClimateOn ? 'climate-on' : 'climate-off'
+  const climateParts: string[] = []
+  if (climateTemp !== undefined) climateParts.push(`${climateTemp}°${config.tempType}`)
+  if (seatClimate) climateParts.push(`Seat: ${seatClimate}`)
+  const climateLabel = isClimateOn
+    ? climateParts.length > 0
+      ? `Climate On (${climateParts.join(' · ')})`
+      : 'Climate On'
+    : 'Climate Off'
+
+  const climateStack = mainStack.addStack()
+  climateStack.addSpacer(2)
+  const climateIconEl = climateStack.addImage(await getTintedIconAsync(climateIconName))
+  climateIconEl.imageSize = new Size(13, 13)
+  climateIconEl.imageOpacity = isClimateOn ? 1.0 : 0.5
+  climateStack.addSpacer(3)
+  const climateTextEl = climateStack.addText(climateLabel)
+  climateTextEl.font = Font.mediumSystemFont(11)
+  climateTextEl.textColor = isClimateOn ? Color.green() : DARK_MODE ? Color.white() : Color.black()
+  climateTextEl.textOpacity = isClimateOn ? 1.0 : 0.5
+  climateTextEl.minimumScaleFactor = 0.5
+  climateStack.addSpacer()
+
   mainStack.addSpacer()
 
-  // Footer
+  // ── Footer ──
   const footerStack = mainStack.addStack()
-  footerStack.addSpacer(10)
+  footerStack.addSpacer(2)
 
-  // Add odometer
-  const footerStackOdometer = footerStack.addStack()
-  const odometerIconElement = footerStackOdometer.addImage(await getTintedIconAsync('odometer'))
-  odometerIconElement.imageSize = new Size(15, 15)
-  odometerIconElement.imageOpacity = 0.6
-  footerStackOdometer.addSpacer(3)
+  const odomStack = footerStack.addStack()
+  const odomIconEl = odomStack.addImage(await getTintedIconAsync('odometer'))
+  odomIconEl.imageSize = new Size(13, 13)
+  odomIconEl.imageOpacity = 0.6
+  odomStack.addSpacer(3)
+  const odomEl = odomStack.addText(`${Math.floor(Number(odometer)).toLocaleString()} ${bl.getDistanceUnit()}`)
+  odomEl.font = Font.mediumSystemFont(11)
+  odomEl.textColor = DARK_MODE ? Color.white() : Color.black()
+  odomEl.textOpacity = 0.6
+  odomEl.minimumScaleFactor = 0.5
 
-  const odometerText = `${Math.floor(Number(odometer)).toString()} ${bl.getDistanceUnit()}`
-  const odometerElement = footerStackOdometer.addText(odometerText)
-  odometerElement.font = Font.mediumSystemFont(12)
-  odometerElement.textColor = DARK_MODE ? Color.white() : Color.black()
-  odometerElement.textOpacity = 0.6
-  odometerElement.minimumScaleFactor = 0.5
-  odometerElement.leftAlignText()
   footerStack.addSpacer()
 
-  const footerStackLastSeen = footerStack.addStack()
-  // Add last seen indicator
-  const lastUpdatedIconElement = footerStackLastSeen.addImage(await getTintedIconAsync('charging-complete-widget'))
-  lastUpdatedIconElement.imageSize = new Size(15, 15)
-  lastUpdatedIconElement.imageOpacity = 0.6
-  footerStackLastSeen.addSpacer(3)
-
-  const lastSeenElement = footerStackLastSeen.addText(
-    lastSeen.toLocaleString(undefined, dateStringOptions) || 'unknown',
-  )
-  lastSeenElement.font = Font.mediumSystemFont(12)
-  lastSeenElement.textOpacity = 0.6
-  lastSeenElement.textColor = DARK_MODE ? Color.white() : Color.black()
-  lastSeenElement.minimumScaleFactor = 0.5
-  lastSeenElement.rightAlignText()
-
-  mainStack.addSpacer()
+  const lastSeenStack = footerStack.addStack()
+  const lastSeenIconEl = lastSeenStack.addImage(await getTintedIconAsync('charging-complete-widget'))
+  lastSeenIconEl.imageSize = new Size(13, 13)
+  lastSeenIconEl.imageOpacity = 0.6
+  lastSeenStack.addSpacer(3)
+  const lastSeenEl = lastSeenStack.addText(lastSeen.toLocaleString(undefined, dateStringOptions) || 'unknown')
+  lastSeenEl.font = Font.mediumSystemFont(11)
+  lastSeenEl.textOpacity = 0.6
+  lastSeenEl.textColor = DARK_MODE ? Color.white() : Color.black()
+  lastSeenEl.minimumScaleFactor = 0.5
+  lastSeenEl.rightAlignText()
 
   return widget
 }
@@ -413,111 +501,123 @@ export async function createSmallWidget(config: Config, bl: Bluelink) {
   const refresh = await refreshDataForWidgetWithTimeout(bl, config)
   const status = refresh.status
 
-  // Prepare image
   const appIcon = await bl.getCarImage(config.carColor)
-  // define widget and set date for when the next refresh should not occur before.
-  const widget = new ListWidget()
-  widget.setPadding(20, 10, 15, 15)
+  const widget = newWidget()
+  widget.setPadding(14, 14, 12, 14)
   widget.refreshAfterDate = refresh.nextRefresh
+  widget.backgroundColor = DARK_MODE ? new Color(DARK_BG_COLOR) : new Color(LIGHT_BG_COLOR)
 
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
-  // mainStack.addSpacer()
 
-  // Add background color
-  widget.backgroundColor = DARK_MODE ? new Color(DARK_BG_COLOR) : new Color(LIGHT_BG_COLOR)
-
-  // Show app icon and title
-  const titleStack = mainStack.addStack()
-  const appIconElement = titleStack.addImage(appIcon)
-  appIconElement.imageSize = new Size(90, 90 / (appIcon.size.width / appIcon.size.height))
-  // appIconElement.cornerRadius = 4
-
-  // space
-  if (!status.status.isCharging) mainStack.addSpacer()
-
-  // Battery Info
-  const batteryInfoStack = mainStack.addStack()
-  batteryInfoStack.layoutVertically()
-  batteryInfoStack.addSpacer()
-
-  // Range
-  const rangeStack = batteryInfoStack.addStack()
-  rangeStack.addSpacer()
-  const rangeText = `${status.status.range} ${bl.getDistanceUnit()}`
-  const rangeElement = rangeStack.addText(rangeText)
-  rangeElement.font = Font.mediumSystemFont(20)
-  rangeElement.textColor = DARK_MODE ? Color.white() : Color.black()
-  rangeElement.rightAlignText()
-  // batteryInfoStack.addSpacer()
-
-  // set status from BL status response
   const isCharging = status.status.isCharging
   const isPluggedIn = status.status.isPluggedIn
   const batteryPercent = status.status.soc
   const remainingChargingTime = status.status.remainingChargeTimeMins
   const chargingKw = getChargingPowerString(status.status.chargingPower)
+  const isLocked = status.status.locked
   const lastSeen = new Date(status.status.lastRemoteStatusCheck)
-
-  // Battery Percent Value
-  const batteryPercentStack = batteryInfoStack.addStack()
-  batteryPercentStack.addSpacer()
-  batteryPercentStack.centerAlignContent()
-  const image = await getTintedIconAsync(calculateBatteryIcon(batteryPercent))
-  const batterySymbolElement = batteryPercentStack.addImage(image)
-  batterySymbolElement.imageSize = new Size(40, 40)
   const chargingIcon = getChargingIcon(isCharging, isPluggedIn, true)
+  const loc = status.status.location
+  const locationAddr = loc ? await reverseGeocode(loc.latitude, loc.longitude).catch(() => null) : null
+
+  // ── Top row: Stats left | Lock right ──
+  const topRow = mainStack.addStack()
+  topRow.layoutHorizontally()
+  topRow.centerAlignContent()
+
+  const statsStack = topRow.addStack()
+  statsStack.layoutVertically()
+
+  const rangeEl = statsStack.addText(`${status.status.range} ${bl.getDistanceUnit()}`)
+  rangeEl.font = Font.boldSystemFont(15)
+  rangeEl.textColor = DARK_MODE ? Color.white() : Color.black()
+
+  const socRow = statsStack.addStack()
+  socRow.centerAlignContent()
+  const battImg = await getTintedIconAsync(calculateBatteryIcon(batteryPercent))
+  const battImgEl = socRow.addImage(battImg)
+  battImgEl.imageSize = new Size(24, 24)
   if (chargingIcon) {
-    const chargingElement = batteryPercentStack.addImage(await getTintedIconAsync(chargingIcon))
-    chargingElement.imageSize = new Size(25, 25)
+    const chgEl = socRow.addImage(await getTintedIconAsync(chargingIcon))
+    chgEl.imageSize = new Size(15, 15)
+  }
+  socRow.addSpacer(2)
+  const socEl = socRow.addText(`${batteryPercent}%`)
+  socEl.font = Font.mediumSystemFont(13)
+  socEl.textColor =
+    batteryPercent <= 10
+      ? Color.red()
+      : batteryPercent <= 20
+        ? Color.yellow()
+        : DARK_MODE
+          ? Color.white()
+          : Color.black()
+
+  if (locationAddr) {
+    const locEl = statsStack.addText('📍 ' + locationAddr)
+    locEl.font = Font.systemFont(8)
+    locEl.textColor = DARK_MODE ? Color.white() : Color.black()
+    locEl.textOpacity = 0.5
+    locEl.minimumScaleFactor = 0.7
+    locEl.lineLimit = 1
   }
 
-  // batteryPercentStack.addSpacer(5)
+  topRow.addSpacer()
 
-  const batteryPercentText = batteryPercentStack.addText(`${batteryPercent.toString()}%`)
-  batteryPercentText.textColor = getBatteryPercentColor(status.status.soc)
-  batteryPercentText.font = Font.mediumSystemFont(20)
+  // Right: Lock (tappable — runs script with action param)
+  const lockTopStack = topRow.addStack()
+  lockTopStack.layoutVertically()
+  lockTopStack.centerAlignContent()
+  lockTopStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=${isLocked ? 'unlock' : 'lock'}`
 
-  if (isCharging) {
-    const chargeComplete = getChargeCompletionString(lastSeen, remainingChargingTime, 'short', true)
-    const batteryChargingTimeStack = mainStack.addStack()
-    batteryChargingTimeStack.layoutHorizontally()
-    // batteryChargingTimeStack.addSpacer()
-    batteryChargingTimeStack.addSpacer()
+  const lockImgEl = lockTopStack.addImage(await getTintedIconAsync(isLocked ? 'locked' : 'unlocked'))
+  lockImgEl.imageSize = new Size(22, 22)
+  lockImgEl.tintColor = isLocked ? Color.green() : Color.red()
+  const lockLabelEl = lockTopStack.addText(isLocked ? 'Locked' : 'Unlocked')
+  lockLabelEl.font = Font.mediumSystemFont(9)
+  lockLabelEl.textColor = isLocked ? Color.green() : Color.red()
+  lockLabelEl.centerAlignText()
 
-    const chargingSpeedElement = batteryChargingTimeStack.addText(`${chargingKw}`)
-    chargingSpeedElement.font = Font.mediumSystemFont(13)
-    chargingSpeedElement.textOpacity = 0.9
-    chargingSpeedElement.textColor = DARK_MODE ? Color.white() : Color.black()
-    chargingSpeedElement.leftAlignText()
-    batteryChargingTimeStack.addSpacer(3)
-
-    const chargingTimeIconElement = batteryChargingTimeStack.addImage(
-      await getTintedIconAsync('charging-complete-widget'),
-    )
-    chargingTimeIconElement.imageSize = new Size(15, 15)
-    batteryChargingTimeStack.addSpacer(3)
-
-    const chargingTimeElement = batteryChargingTimeStack.addText(`${chargeComplete}`)
-    chargingTimeElement.font = Font.mediumSystemFont(12)
-    chargingTimeElement.textOpacity = 0.9
-    chargingTimeElement.textColor = DARK_MODE ? Color.white() : Color.black()
-    chargingTimeElement.rightAlignText()
-  }
+  // ── Car image centered ──
+  mainStack.addSpacer()
+  const carRow = mainStack.addStack()
+  carRow.layoutHorizontally()
+  carRow.addSpacer()
+  const carImgEl = carRow.addImage(appIcon)
+  carImgEl.imageSize = new Size(115, 115 / (appIcon.size.width / appIcon.size.height))
+  carImgEl.centerAlignImage()
+  carRow.addSpacer()
   mainStack.addSpacer()
 
-  // Footer
-  const footerStack = mainStack.addStack()
-  footerStack.addSpacer() // hack - dynamic spacing doesnt seem to work that well here
+  // ── Charging row ──
+  if (isCharging) {
+    const chargingRow = mainStack.addStack()
+    chargingRow.layoutHorizontally()
+    chargingRow.addSpacer()
 
-  // Add last seen indicator - use consistent date format as spacing is hard coded, hence we need to control the length
-  const lastSeenElement = footerStack.addText(lastSeen.toLocaleString(undefined, dateStringOptions) || 'unknown')
-  lastSeenElement.lineLimit = 1
-  lastSeenElement.font = Font.lightSystemFont(11)
-  lastSeenElement.textOpacity = 0.6
-  lastSeenElement.textColor = DARK_MODE ? Color.white() : Color.black()
+    const speedEl = chargingRow.addText(chargingKw)
+    speedEl.font = Font.mediumSystemFont(11)
+    speedEl.textColor = Color.green()
+    chargingRow.addSpacer(4)
 
-  // mainStack.addSpacer()
+    const timeIconEl = chargingRow.addImage(await getTintedIconAsync('charging-complete-widget'))
+    timeIconEl.imageSize = new Size(11, 11)
+    chargingRow.addSpacer(3)
+
+    const timeEl = chargingRow.addText(formatRemainingTime(remainingChargingTime))
+    timeEl.font = Font.mediumSystemFont(11)
+    timeEl.textColor = Color.green()
+  }
+
+  // ── Footer: last seen ──
+  const footerRow = mainStack.addStack()
+  footerRow.addSpacer()
+  const footerEl = footerRow.addText(lastSeen.toLocaleString(undefined, dateStringOptions) || 'unknown')
+  footerEl.lineLimit = 1
+  footerEl.font = Font.lightSystemFont(10)
+  footerEl.textOpacity = 0.5
+  footerEl.textColor = DARK_MODE ? Color.white() : Color.black()
 
   return widget
 }
@@ -526,7 +626,7 @@ export async function createHomeScreenCircleWidget(config: Config, bl: Bluelink)
   const refresh = await refreshDataForWidgetWithTimeout(bl, config)
   const status = refresh.status
 
-  const widget = new ListWidget()
+  const widget = newWidget()
   widget.refreshAfterDate = refresh.nextRefresh
 
   const progressStack = await progressCircle(widget, status.status.soc)
@@ -542,7 +642,7 @@ export async function createHomeScreenRectangleWidget(config: Config, bl: Blueli
   const refresh = await refreshDataForWidgetWithTimeout(bl, config)
   const status = refresh.status
 
-  const widget = new ListWidget()
+  const widget = newWidget()
   widget.refreshAfterDate = refresh.nextRefresh
 
   const widgetStack = widget.addStack()
@@ -591,7 +691,8 @@ export async function createHomeScreenRectangleWidget(config: Config, bl: Blueli
 
   batteryPercentStack.addSpacer(3)
   const batteryPercentText = batteryPercentStack.addText(`${batteryPercent.toString()}%`)
-  batteryPercentText.textColor = getBatteryPercentColor(status.status.soc)
+  batteryPercentText.textColor =
+    status.status.soc <= 10 ? Color.red() : status.status.soc <= 20 ? Color.yellow() : Color.white()
   batteryPercentText.font = Font.boldSystemFont(15)
 
   if (isCharging) {
@@ -628,7 +729,7 @@ export async function createHomeScreenInlineWidget(config: Config, bl: Bluelink)
   const remainingChargingTime = status.status.remainingChargeTimeMins
   const lastSeen = new Date(status.status.lastRemoteStatusCheck)
 
-  const widget = new ListWidget()
+  const widget = newWidget()
   widget.refreshAfterDate = refresh.nextRefresh
 
   const widgetStack = widget.addStack()

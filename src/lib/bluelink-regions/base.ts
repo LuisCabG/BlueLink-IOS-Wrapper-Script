@@ -47,6 +47,8 @@ export interface BluelinkStatus {
   range: number
   locked: boolean
   climate: boolean
+  climateTemp?: number
+  seatClimate?: string
   soc: number
   twelveSoc: number
   odometer: number
@@ -103,7 +105,7 @@ export interface ClimateRequest {
   enable: boolean
   frontDefrost: boolean
   rearDefrost: boolean
-  steering: boolean
+  steering: boolean | number
   temp: number
   durationMinutes: number
   seatClimateOption?: SeatClimate
@@ -266,15 +268,41 @@ export class Bluelink {
     return _default
   }
 
-  protected getHeatingValue(rearDefrost: boolean, steering: boolean): number {
+  protected decodeSeatClimate(info: Record<string, number> | undefined): string | undefined {
+    if (!info) return undefined
+    const drvState = info.drvSeatHeatState ?? 0
+    const labels: Record<number, string> = {
+      3: 'Cool-Low',
+      4: 'Cool-Med',
+      5: 'Cool-High',
+      6: 'Heat-Low',
+      7: 'Heat-Med',
+      8: 'Heat-High',
+    }
+    return labels[drvState]
+  }
+
+  protected decodeAirTemp(airTemp: { value: string; unit: number } | undefined): number | undefined {
+    if (!airTemp?.value) return undefined
+    const numVal = Number(airTemp.value)
+    if (!isNaN(numVal) && numVal > 0) return numVal
+    if (this.tempLookup) {
+      const hIdx = this.tempLookup.H.indexOf(airTemp.value)
+      if (hIdx >= 0) return airTemp.unit === 1 ? this.tempLookup.F[hIdx] : this.tempLookup.C[hIdx]
+    }
+    return undefined
+  }
+
+  protected getHeatingValue(rearDefrost: boolean, steering: boolean | number): number {
+    const steeringOn = Number(steering) > 0
     // 0 = None
     // 2 = Back Defroster only
     // 3 = Steering Wheel only
     // 4 = Steering and Defroster
-    if (!rearDefrost && !steering) return 0
-    if (rearDefrost && steering) return 4
+    if (!rearDefrost && !steeringOn) return 0
+    if (rearDefrost && steeringOn) return 4
     if (rearDefrost) return 2
-    if (steering) return 3
+    if (steeringOn) return 3
     return 0 // default
   }
 

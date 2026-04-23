@@ -281,6 +281,8 @@ export class BluelinkCanada extends Bluelink {
             : 0,
       locked: status.doorLock,
       climate: status.airCtrlOn,
+      climateTemp: this.decodeAirTemp(status.airTemp) ?? this.cache?.status.climateTemp,
+      seatClimate: this.decodeSeatClimate(status.seatHeaterVentInfo),
       soc: status.evStatus.batteryStatus,
       twelveSoc: status.battery && status.battery.batSoc ? status.battery.batSoc : 0,
       odometer: odometer ? odometer : this.cache ? this.cache.status.odometer : 0,
@@ -465,6 +467,7 @@ export class BluelinkCanada extends Bluelink {
     id: string,
     config: ClimateRequest,
     newPayloadType = false,
+    retryWithoutSeats = false,
   ): Promise<{ isSuccess: boolean; data: BluelinkStatus }> {
     if (!this.tempLookup) {
       throw Error(`Mis-Configured sub-class - no temp lookup defined`)
@@ -482,6 +485,14 @@ export class BluelinkCanada extends Bluelink {
     // in the future we can default to the new payload key
     const authCode = await this.getAuthCode()
     const api = 'evc/rfon'
+    const climateConfig =
+      retryWithoutSeats && config.seatClimateOption
+        ? {
+            ...config,
+            seatClimateOption: undefined,
+          }
+        : config
+
     const resp = await this.request({
       url: this.apiDomain + api,
       method: 'POST',
@@ -489,21 +500,21 @@ export class BluelinkCanada extends Bluelink {
         pin: this.config.auth.pin,
         [newPayloadType ? 'remoteControl' : 'hvacInfo']: {
           airCtrl: 1,
-          defrost: config.frontDefrost,
+          defrost: climateConfig.frontDefrost,
           airTemp: {
             value: this.tempLookup.H[tempIndex],
             unit: 0,
             hvacTempType: 1,
           },
-          igniOnDuration: config.durationMinutes,
-          heating1: this.getHeatingValue(config.rearDefrost, config.steering),
-          ...(config.seatClimateOption &&
-            isNotEmptyObject(config.seatClimateOption) && {
+          igniOnDuration: climateConfig.durationMinutes,
+          heating1: this.getHeatingValue(climateConfig.rearDefrost, climateConfig.steering),
+          ...(climateConfig.seatClimateOption &&
+            isNotEmptyObject(climateConfig.seatClimateOption) && {
               seatHeaterVentCMD: {
-                drvSeatOptCmd: config.seatClimateOption.driver,
-                astSeatOptCmd: config.seatClimateOption.passenger,
-                rlSeatOptCmd: config.seatClimateOption.rearLeft,
-                rrSeatOptCmd: config.seatClimateOption.rearRight,
+                drvSeatOptCmd: climateConfig.seatClimateOption.driver,
+                astSeatOptCmd: climateConfig.seatClimateOption.passenger,
+                rlSeatOptCmd: climateConfig.seatClimateOption.rearLeft,
+                rrSeatOptCmd: climateConfig.seatClimateOption.rearRight,
               },
             }),
         },
@@ -523,7 +534,10 @@ export class BluelinkCanada extends Bluelink {
     if (this.config.debugLogging) this.logger.log(error)
 
     // retry with new payload type if needed
-    if (!newPayloadType) return await this.climateOn(id, config, true)
+    if (!newPayloadType) return await this.climateOn(id, config, true, retryWithoutSeats)
+    if (!retryWithoutSeats && config.seatClimateOption && isNotEmptyObject(config.seatClimateOption)) {
+      return await this.climateOn(id, config, false, true)
+    }
     throw Error(error)
   }
 

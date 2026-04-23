@@ -119,6 +119,18 @@ import { confirm, quickOptions } from './lib/scriptable-utils'
     }
   }
 
+  // Handle lock/unlock action triggered from widget tap
+  const widgetAction = args.queryParameters['action']
+  if (widgetAction === 'lock' || widgetAction === 'unlock') {
+    await new Promise<void>((resolve) => {
+      bl.processRequest(widgetAction, undefined, (isComplete: boolean, _didSucceed: boolean, _data: unknown) => {
+        if (isComplete) resolve()
+      })
+    })
+    Script.complete()
+    return
+  }
+
   // actual app / widget / siri response handiling
   if (config.runsInWidget) {
     let widget = undefined

@@ -8,6 +8,7 @@
     "allowSyntheticDefaultImports": true,
     "noUnusedLocals": true,
     "lib": ["ESNext"],
+    "types": ["scriptable-ios"],
     "baseUrl": "src",
     "noUncheckedIndexedAccess": true,
     "allowUnreachableCode": false,
